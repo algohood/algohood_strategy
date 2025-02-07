@@ -135,7 +135,14 @@ algohood_strategy/
 
 ## Installation
 ```bash
-pip install git+https://github.com/algohood/algohood_strategy.git@master
+python -m venv .venv
+# windows   
+source .venv/Scripts/activate
+# linux
+source .venv/bin/activate
+git clone https://github.com/algohood/algohood_strategy.git
+cd algohood_strategy
+pip install -e .
 ```
 
 ## System Requirements
