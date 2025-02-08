@@ -6,6 +6,5 @@ Created on 2024/9/24 9:14
 """
 is_localhost = False
 redis_host = 'localhost'
-redis_port = 6379
+config_port = 6379
 node_port = 9001
-
