@@ -159,8 +159,13 @@ Python 3.10+ 及`pyproject.toml`中列出的依赖
    - 根据操作系统选择对应的安装方式：
 
 2. **启动Redis实例**
-   - config实例（端口6379）：用于保存配置和数据状态  
-   - node实例（端口9001）：用于存储实际数据
+   - config实例（端口6379）：用于保存配置和数据状态，端口可自定义，但需要与配置文件中的端口号一致
+   - node实例（端口9001）：用于存储实际数据，端口可自定义，但需要与配置文件中的端口号一致
+   ```bash
+   mkdir --parents ~/redis_file/config ~/redis_file/node
+   screen -dmS config bash -c 'redis-stack-server --port 6379 --dir ~/redis_file/config'
+   screen -dmS node bash -c 'redis-stack-server --port 9001 --dir ~/redis_file/node'
+   ```
 
 3. **运行初始化脚本**
    ```bash
