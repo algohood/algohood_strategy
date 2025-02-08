@@ -24,7 +24,7 @@ from algoConfig.redisConfig import redis_host, config_port, is_localhost
 
 try:
     from algoExecution.algoEngine.dataMgr import DataMgr as ExecuteDataMgr   # type: ignore
-    from algoExecution.algoEngine.eventMgr import EventMgr   # type: ignore
+    from algoExecution.algoEngine.eventMgr import EventMgr as ExecuteEventMgr   # type: ignore
     from algoPortfolio.algoEngine.dataMgr import DataMgr as PortfolioDataMgr   # type: ignore
     from algoPortfolio.algoEngine.eventMgr import EventMgr as PortfolioEventMgr   # type: ignore
 
@@ -381,7 +381,7 @@ class BrokerMgr:
             for task in _tasks:
                 execute_name = task.pop('_execute_name')
                 data_mgr.set_data_type(task.pop('_data_type'))
-                event_mgr = EventMgr(_data_mgr=data_mgr, **task)
+                event_mgr = ExecuteEventMgr(_data_mgr=data_mgr, **task)
                 await event_mgr.init_mgrs(_logger_type='local', _exec_config=exec_config)
 
                 orders = []
