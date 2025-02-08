@@ -23,10 +23,10 @@ from algoConfig.zmqConfig import zmq_host, zmq_port
 from algoConfig.redisConfig import redis_host, config_port, is_localhost
 
 try:
-    from algoExecution.algoEngine.dataMgr import DataMgr as ExecuteDataMgr  
-    from algoExecution.algoEngine.eventMgr import EventMgr  
-    from algoPortfolio.algoEngine.dataMgr import DataMgr as PortfolioDataMgr  
-    from algoPortfolio.algoEngine.eventMgr import EventMgr as PortfolioEventMgr  
+    from algoExecution.algoEngine.dataMgr import DataMgr as ExecuteDataMgr   # type: ignore
+    from algoExecution.algoEngine.eventMgr import EventMgr   # type: ignore
+    from algoPortfolio.algoEngine.dataMgr import DataMgr as PortfolioDataMgr   # type: ignore
+    from algoPortfolio.algoEngine.eventMgr import EventMgr as PortfolioEventMgr   # type: ignore
 
 except ImportError:
     ExecuteDataMgr = None
@@ -35,9 +35,9 @@ except ImportError:
     PortfolioEventMgr = None
 
 try:
-    from algoSignal.algoEngine.dataMgr import DataMgr as SignalDataMgr
-    from algoSignal.algoEngine.performanceMgr import PerformanceMgr
-    from algoSignal.algoEngine.signalMgr import SignalMgr
+    from algoSignal.algoEngine.dataMgr import DataMgr as SignalDataMgr   # type: ignore
+    from algoSignal.algoEngine.performanceMgr import PerformanceMgr   # type: ignore
+    from algoSignal.algoEngine.signalMgr import SignalMgr   # type: ignore
     
 except ImportError:
     SignalDataMgr = None
@@ -672,8 +672,9 @@ class BrokerMgr:
         return wsl_ip
 
     @classmethod
-    def sync_redis(cls, _redis_host, _config_port, _node_port):
+    def sync_redis(cls, _symbols, _redis_host, _config_port, _node_port):
         exist_keys = []
+        symbols = _symbols if isinstance(_symbols, list) else [_symbols]
         loop = asyncio.get_event_loop()
         client = AsyncRedisClient(_redis_host, _config_port)
         node = AsyncRedisClient(_redis_host, _node_port)
@@ -689,9 +690,13 @@ class BrokerMgr:
             zip_file_path = '{}/{}'.format(folder_path, file_name)
             with zipfile.ZipFile(zip_file_path, 'r') as zip_ref:
                 symbol, _ = file_name.split('-', 1)
+                if symbol not in symbols:
+                    continue
+
                 coro = client.get_hash(0, 'last_ts', '{}|binance_future'.format(symbol))
                 last_cache_ts = loop.run_until_complete(coro) or b'0'
                 last_cache_ts = int(last_cache_ts.decode())
+
                 _, _, tmp = file_name.split('-', 2)
                 date_str, _ = tmp.split('.')
                 zip_timestamp = local_date_timestamp(date_str)
