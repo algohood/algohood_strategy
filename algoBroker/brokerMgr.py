@@ -20,7 +20,7 @@ import requests
 
 from algoConfig.execConfig import delay_dict, fee_dict
 from algoConfig.zmqConfig import zmq_host, zmq_port
-from algoConfig.redisConfig import redis_host, redis_port, is_localhost
+from algoConfig.redisConfig import redis_host, config_port, is_localhost
 
 try:
     from algoExecution.algoEngine.dataMgr import DataMgr as ExecuteDataMgr  
@@ -206,7 +206,7 @@ class BrokerMgr:
         else:
             file_name = '{}_{}'.format(int(time.time() * 1000000), _task_name)
 
-            data_mgr = SignalDataMgr(redis_host, redis_port)
+            data_mgr = SignalDataMgr(redis_host, config_port)
             await data_mgr.init_data_mgr(is_localhost)
             abstract_list = []
             for task in _tasks:
@@ -283,7 +283,7 @@ class BrokerMgr:
         else:
             file_name = '{}_{}'.format(int(time.time() * 1000000), _task_name)
 
-            data_mgr = SignalDataMgr(redis_host, redis_port)
+            data_mgr = SignalDataMgr(redis_host, config_port)
             await data_mgr.init_data_mgr(is_localhost)
 
             abstracts = []
@@ -375,7 +375,7 @@ class BrokerMgr:
         else:
             file_name = '{}_{}'.format(int(time.time() * 1000000), _task_name)
 
-            data_mgr = ExecuteDataMgr(redis_host, redis_port)
+            data_mgr = ExecuteDataMgr(redis_host, config_port)
             await data_mgr.init_data_mgr(is_localhost)
 
             for task in _tasks:
@@ -446,7 +446,7 @@ class BrokerMgr:
             file_name = '{}_{}'.format(int(time.time() * 1000000), _task_name)
             folder_name = 'local_{}'.format(file_name)
 
-            data_mgr = PortfolioDataMgr(redis_host, redis_port)
+            data_mgr = PortfolioDataMgr(redis_host, config_port)
             await data_mgr.init_data_mgr(is_localhost)
             abstract_list = []
             for order_task in _order_tasks:
@@ -677,9 +677,12 @@ class BrokerMgr:
         loop = asyncio.get_event_loop()
         client = AsyncRedisClient(_redis_host, _config_port)
         node = AsyncRedisClient(_redis_host, _node_port)
-        loop.run_until_complete(client.add_hash(0, 'data_shard', {'{}:{}'.format(_redis_host, _node_port): 1}))
+        rsp = loop.run_until_complete(client.add_hash(0, 'data_shard', {'{}:{}'.format(_redis_host, _node_port): 1}))
+        if not rsp:
+            logger.error('add hash failed, check config redis status')
+            return
+        
         receive_ts_bias = 100000
-
         folder_path = '../algoData'
         file_list = sorted(os.listdir(folder_path))
         for file_name in file_list:
@@ -730,7 +733,11 @@ class BrokerMgr:
                             if key not in exist_keys:
                                 pair, exchange, data_type, field = key.split('|')
                                 labels = {'pair': pair, 'exchange': exchange, 'data_type': data_type, 'field': field}
-                                loop.run_until_complete(node.create_ts_key(0, key, labels))
+                                rsp = loop.run_until_complete(node.create_ts_key(0, key, labels))
+                                if not rsp:
+                                    logger.error('create ts key failed, check node redis status')
+                                    return
+
                                 exist_keys.append(key)
                         # 添加数据到插入列表
 
@@ -744,7 +751,11 @@ class BrokerMgr:
                     if insert_list:
                         logger.info('{} sync to redis'.format(file_name))
                         coro = node.add_ts_batch(0, insert_list)
-                        loop.run_until_complete(coro)
+                        rsp = loop.run_until_complete(coro)
+                        if not rsp:
+                            logger.error('add ts batch failed, check node redis status')
+                            return
+
                         coro = client.add_hash(0, 'last_ts', {'{}|binance_future'.format(symbol): zip_timestamp})
                         loop.run_until_complete(coro)
 
