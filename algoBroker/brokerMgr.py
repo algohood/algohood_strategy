@@ -14,13 +14,14 @@ import subprocess
 import time
 import zipfile
 from enum import Enum
-
+from typing import List
 import pandas as pd
 import requests
 
 from algoConfig.execConfig import delay_dict, fee_dict
 from algoConfig.zmqConfig import zmq_host, zmq_port
 from algoConfig.redisConfig import redis_host, config_port, is_localhost
+from algoUtils.schemaUtil import SignalTaskParam
 
 try:
     from algoExecution.algoEngine.dataMgr import DataMgr as ExecuteDataMgr   # type: ignore
@@ -30,14 +31,18 @@ try:
 
 except ImportError:
     ExecuteDataMgr = None
-    EventMgr = None
+    ExecuteEventMgr = None
     PortfolioDataMgr = None
     PortfolioEventMgr = None
 
 try:
     from algoSignal.algoEngine.dataMgr import DataMgr as SignalDataMgr   # type: ignore
     from algoSignal.algoEngine.performanceMgr import PerformanceMgr   # type: ignore
+    from algoSignal.algoEngine.eventMgr import EventMgr as SignalEventMgr   # type: ignore
     from algoSignal.algoEngine.signalMgr import SignalMgr   # type: ignore
+    from algoSignal.algoEngine.interceptMgr import InterceptMgr   # type: ignore
+    from algoSignal.algoEngine.targetMgr import TargetMgr   # type: ignore
+    from algoSignal.algoEngine.featureMgr import FeatureMgr   # type: ignore
     
 except ImportError:
     SignalDataMgr = None
@@ -169,23 +174,40 @@ class BrokerMgr:
         }
 
     @classmethod
-    async def submit_signal_tasks(cls, _task_name, _tasks, _update_codes=True, _use_cluster=False):
-        signal_names = [v['_signal_name'] for v in _tasks]
-        if len(signal_names) > len(set(signal_names)):
-            logger.error('duplicated signal names')
+    async def submit_signal_tasks(
+        cls, _task_name: str, _tasks: List[SignalTaskParam], _update_codes=True, _use_cluster=False
+    ):
+        signal_task_names = [v.signal_task_name for v in _tasks]
+        if len(signal_task_names) > len(set(signal_task_names)):
+            logger.error('duplicated signal task names')
             return
 
         if _use_cluster:
             zmq_client = AsyncReqZmq(zmq_port, zmq_host)
-            module_names = set([v['_signal_method_name'] for v in _tasks])
+            module_names_dict = {}
+            for task in _tasks:
+                module_names_dict.setdefault('Signals', set()).add(task.signal_mgr_param.signal_method_name)
+                
+                if task.target_mgr_param:
+                    module_names_dict.setdefault('Targets', set()).add(task.target_mgr_param.target_method_name)
+                
+                if task.intercept_mgr_param:
+                    module_names_dict.setdefault('Intercepts', set()).add(task.intercept_mgr_param.intercept_method_name)
+                
+                if isinstance(task.feature_mgr_params, list):
+                    for feature_mgr_param in task.feature_mgr_params:
+                        module_names_dict.setdefault('Features', set()).add(feature_mgr_param.feature_method_name)
+                elif task.feature_mgr_params:
+                    module_names_dict.setdefault('Features', set()).add(task.feature_mgr_params.feature_method_name)
 
-            for name in module_names:
-                module_name = 'algoStrategy.algoSignals.{}'.format(name)
-                module = importlib.import_module(module_name)
-                script_content = inspect.getsource(module) if _update_codes else ''
+            for module_type, module_names in module_names_dict.items():
+                for name in module_names:
+                    module_name = 'algoStrategy.algo{}.{}'.format(module_type, name)
+                    module = importlib.import_module(module_name)
+                    script_content = inspect.getsource(module) if _update_codes else ''
 
                 task_dict = {'task_type': 'signal', 'task': {'type': 'code', 'info': {
-                    'module_name': name, 'scripts': script_content
+                    'module_name': module_name, 'scripts': script_content
                 }}}
                 tmp = await zmq_client.send_msg(json.dumps(task_dict).encode())
                 rsp = json.loads(tmp.decode())
@@ -194,7 +216,14 @@ class BrokerMgr:
                     return
 
             logger.info('strategy checked')
-            task_dict = {'task_type': 'signal', 'task': {'task_name': _task_name, 'type': 'tasks', 'info': _tasks}}
+            task_dict = {
+                'task_type': 'signal', 
+                'task': {
+                    'task_name': _task_name, 
+                    'type': 'tasks', 
+                    'info': [task.model_dump() for task in _tasks]
+                }
+            }
             tmp = await zmq_client.send_msg(json.dumps(task_dict).encode())
             rsp = json.loads(tmp.decode())
             if rsp['code'] == 200:
@@ -211,25 +240,36 @@ class BrokerMgr:
             abstract_list = []
             for task in _tasks:
                 data_mgr.clear_cache()
-                signal_name = task.pop('_signal_name')
-                result_path = '{}/{}'.format(file_name, signal_name)
-                param = task.copy()
-                data_mgr.set_data_type(task.pop('_data_type'))
-                signal_mgr = SignalMgr(
-                    task.pop('_signal_method_name'),
-                    task.pop('_signal_method_param'),
-                    task.pop('_intercept_method_name'),
-                    task.pop('_intercept_method_param'),
-                    data_mgr
+                result_path = '{}/{}'.format(file_name, task.signal_task_name)
+                data_mgr.set_data_type(task.data_type)
+
+                # init mgrs
+                signal_mgr = SignalMgr(task.signal_mgr_param)
+                feature_mgr = FeatureMgr(task.feature_mgr_params)
+                intercept_mgr = InterceptMgr(task.intercept_mgr_param)
+                target_mgr = TargetMgr(task.target_mgr_param)
+
+                event_mgr = SignalEventMgr(
+                    signal_mgr,
+                    feature_mgr,
+                    target_mgr,
+                    intercept_mgr,
+                    data_mgr,
                 )
-                signals = await signal_mgr.start_task(**task)
+
+                signals = await event_mgr.start_task(
+                    task.lag,
+                    task.symbols,
+                    task.start_timestamp,
+                    task.end_timestamp,
+                )
 
                 if signals:
-                    abstract = {'result_path': result_path, 'result_counts': len(signals), 'signal_name': signal_name}
+                    abstract = {'result_path': result_path, 'result_counts': len(signals)}
                     os.makedirs('../algoFile/{}'.format(file_name), exist_ok=True)
-                    abstract_list.append({**abstract, **param})
+                    abstract_list.append({**abstract, **task.model_dump(exclude_defaults=True)})
                     pd.DataFrame(signals).to_csv('../algoFile/{}.csv'.format(result_path))
-                    logger.info('{} finished'.format(signal_name))
+                    logger.info('{} finished'.format(task.signal_task_name))
 
             if abstract_list:
                 pd.DataFrame(abstract_list).to_csv('../algoFile/abstract_{}.csv'.format(file_name))
