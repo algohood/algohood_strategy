@@ -40,7 +40,7 @@ try:
     from algoSignal.algoEngine.performanceMgr import PerformanceMgr   # type: ignore
     from algoSignal.algoEngine.eventMgr import EventMgr as SignalEventMgr   # type: ignore
     from algoSignal.algoEngine.signalMgr import SignalMgr   # type: ignore
-    from algoSignal.algoEngine.interceptMgr import InterceptMgr   # type: ignore
+    from algoSignal.algoEngine.modelMgr import ModelMgr   # type: ignore
     from algoSignal.algoEngine.targetMgr import TargetMgr   # type: ignore
     from algoSignal.algoEngine.featureMgr import FeatureMgr   # type: ignore
     
@@ -246,14 +246,14 @@ class BrokerMgr:
                 # init mgrs
                 signal_mgr = SignalMgr(task.signal_mgr_param)
                 feature_mgr = FeatureMgr(task.feature_mgr_params)
-                intercept_mgr = InterceptMgr(task.intercept_mgr_param)
-                target_mgr = TargetMgr(task.target_mgr_param)
+                model_mgr = ModelMgr(task.model_mgr_param)
+                target_mgr = TargetMgr(task.performance_mgr_param, task.target_mgr_param)
 
                 event_mgr = SignalEventMgr(
                     signal_mgr,
                     feature_mgr,
                     target_mgr,
-                    intercept_mgr,
+                    model_mgr,
                     data_mgr,
                 )
 
@@ -779,10 +779,6 @@ class BrokerMgr:
                                 pair, exchange, data_type, field = key.split('|')
                                 labels = {'pair': pair, 'exchange': exchange, 'data_type': data_type, 'field': field}
                                 rsp = loop.run_until_complete(node.create_ts_key(0, key, labels))
-                                if not rsp:
-                                    logger.error('create ts key failed, check node redis status')
-                                    return
-
                                 exist_keys.append(key)
                         # 添加数据到插入列表
 
