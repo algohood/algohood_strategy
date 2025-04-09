@@ -84,27 +84,27 @@ model_mgr_param = ModelMgrParam(
     model_retain_size=30,
 )
 
-# symbols = [
-#     'doge_usdt|binance_future',
-#     # 'sol_usdt|binance_future',
-#     # 'xrp_usdt|binance_future',
-#     # 'pnut_usdt|binance_future',
-# ]
-coro = BrokerMgr.get_active_symbols(_expire_duration=60 * 60 * 24 * 30, _data_type='trade')
-symbols = asyncio.run(coro) or []
+symbols = [
+    'doge_usdt|binance_future',
+    # 'sol_usdt|binance_future',
+    # 'xrp_usdt|binance_future',
+    # 'pnut_usdt|binance_future',
+]
+# coro = BrokerMgr.get_active_symbols(_expire_duration=60 * 60 * 24 * 30, _data_type='trade')
+# symbols = asyncio.run(coro) or []
 
 tasks = [
     SignalTaskParam(
         signal_task_name='grid_{}'.format(symbol).replace('|', '_'),
         signal_mgr_param=signal_mgr_param,
-        feature_mgr_params=feature_mgr_param,
-        # target_mgr_param=target_mgr_param,
+        # feature_mgr_params=feature_mgr_param,
+        target_mgr_param=target_mgr_param,
         # model_mgr_param=model_mgr_param,
         lag=1,
         symbols=symbol,
         data_type='trade',
         start_timestamp=local_datetime_timestamp('2025-02-10 00:00:00'),
-        end_timestamp=local_datetime_timestamp('2025-03-10 00:00:00'),
+        end_timestamp=local_datetime_timestamp('2025-03-01 00:00:00'),
     )
     for symbol in symbols
 ]
@@ -113,7 +113,7 @@ coro = BrokerMgr.submit_signal_tasks(
     _task_name='grid',
     _tasks=tasks,
     _update_codes=True,
-    _use_cluster=True
+    # _use_cluster=True
 )
 
 asyncio.run(coro)

@@ -1,7 +1,8 @@
 from algoUtils.baseUtil import TargetBase
 from algoUtils.schemaUtil import Signal
-from typing import Dict, List, Optional
+from typing import Dict, Optional
 import math
+import numpy as np
 
 
 class Algo(TargetBase):
@@ -9,7 +10,7 @@ class Algo(TargetBase):
         self.holding_period = _holding_period
         self.least_pct = _least_pct
         self.intercept_threshold = _intercept_threshold
-        self.cut_timestamp = None
+        self.cut_timestamp = 0
         self.start_price = 0
         self.direction = None
         self.cache_data = []
@@ -20,20 +21,19 @@ class Algo(TargetBase):
         self.start_price = abs(_signal.price)
         self.direction = 1 if _signal.price > 0 else -1
 
-    def generate_targets(self, _data: Dict[str, List[List]]) -> Optional[Dict[str, float]]:
+    def generate_targets(self, _current_ts: float, _data: Dict[str, np.ndarray]) -> Optional[Dict[str, float]]:
         _, batch_data = next(iter(_data.items()))
-        if not batch_data:
+        if not batch_data.any():
             return
 
-        current_timestamp = batch_data[-1][0]
-        if current_timestamp < self.cut_timestamp:
-            self.cache_data.extend([trade[2] for trade in batch_data])
+        if _current_ts < self.cut_timestamp:
+            self.cache_data.extend(batch_data[:, 2])
             return
 
         if not self.cache_data:
             return {'reverse_counts': 0, 'bias': 0}
 
-        avg_close = sum(self.cache_data) / len(self.cache_data)
+        avg_close = np.mean(self.cache_data)
         bias = (avg_close - self.start_price) / self.start_price
         last_position = None
         reverse_counts = 0
@@ -55,7 +55,7 @@ class Algo(TargetBase):
                     reverse_counts += 1
                     last_position = current_position
 
-        return {'reverse_counts': math.log(reverse_counts + 1), 'bias': bias}
+        return {'reverse_counts': float(math.log(reverse_counts + 1)), 'bias': float(bias)}
 
     def intercept_signal_given_targets(self, _targets: Dict[str, float]) -> bool:
-        return _targets['reverse_counts'] < math.log(self.intercept_threshold + 1)
+        return _targets['reverse_counts'] < float(math.log(self.intercept_threshold + 1))
