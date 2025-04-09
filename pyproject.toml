@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=61.0.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = { find = {} }
+
+[project]
+name = "algoStrategy"
+version = "0.1"
+authors = [
+    { name = "jijingyuan", email = "jijingyuan@algohood.com" },
+]
+description = "samples for build ur own strategy scripts"
+requires-python = ">=3.10"
+dependencies = [
+    "algoSignal @ git+https://github.com/algohood/algohood_signal.git@master",
+    "algoUtils @ git+https://github.com/algohood/algohood_utils.git@master",
+] 

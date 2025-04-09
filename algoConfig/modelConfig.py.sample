@@ -1,0 +1,13 @@
+url_dict = {
+    'siliconflow': 'https://api.siliconflow.cn/v1',
+    'deepseek': 'https://api.deepseek.com',
+    'doubao': 'https://ark.cn-beijing.volces.com/api/v3',
+    'tecent': 'https://api.lkeap.cloud.tencent.com/v1',
+}
+
+api_keys = {
+    'siliconflow': 'sk-xxx',
+    'deepseek': 'sk-xxx',
+    'doubao': 'xxx',
+    'tecent': 'sk-xxx',
+}
